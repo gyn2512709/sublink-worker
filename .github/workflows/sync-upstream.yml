@@ -1,0 +1,61 @@
+name: Sync upstream safely
+
+on:
+  schedule:
+    - cron: '43 20 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-upstream.yml'
+      - '.deployment/sync-upstream.py'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch upstream while preserving local deployment policy
+        id: upstream
+        run: python3 .deployment/sync-upstream.py
+      - name: Install dependencies
+        if: steps.upstream.outputs.changed == 'true'
+        run: npm ci
+      - name: Test upstream and existing-link compatibility
+        if: steps.upstream.outputs.changed == 'true'
+        run: |
+          npm test
+          npx vitest run .deployment/compatibility.test.js
+          npx wrangler deploy --dry-run --config .deployment/wrangler.jsonc
+      - name: Publish validated source for Cloudflare Builds
+        env:
+          SYNC_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: sync validated upstream and record scheduled check'
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$SYNC_TOKEN" | base64 -w0)"
+          git push origin HEAD:main

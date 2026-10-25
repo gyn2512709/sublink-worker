@@ -1,0 +1,16 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "sublink-worker",
+  "main": "../src/worker.jsx",
+  "account_id": "831f12baea157a9dce3826867a0fea47",
+  "compatibility_date": "2024-07-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "keep_vars": true,
+  "kv_namespaces": [
+    { "binding": "SUBLINK_KV", "id": "564f2423ac4e4af8a438b4af87665beb" }
+  ],
+  "assets": { "directory": "../public", "binding": "ASSETS" },
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } }
+}
